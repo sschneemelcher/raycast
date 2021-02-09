@@ -1,5 +1,6 @@
 import eel
 import numpy as np
+import datetime
 
 @eel.expose
 def print_log(k, v):
@@ -11,9 +12,18 @@ def move(k, v):
 		global moves
 		moves[k-37] = v
 	
+def print_fps(start, fps):
+	print(fps)
+	return datetime.datetime.now(), 0
+
+
+def get_dist(x1, x2, y1, y2, a1, a2):
+	ca = np.cos((a1-a2)%(2*np.pi))
+	return (np.abs(x1 - x2)+np.abs(y1 - y2))*ca
+
 def draw_rays():
 	ray_list = []
-	ra = player[4]-0.3
+	ra = (player[4]-30*np.pi/180)%(2*np.pi)
 	for r in range(61):
 		rx, ry, xo, yo, mx, my, dof = [0]*7
 		#check horizontal lines
@@ -44,7 +54,7 @@ def draw_rays():
 				rx += xo
 				ry += yo
 				dof+=1
-		dist = (np.abs(player[0]-rx)+np.abs(player[1]-ry))
+		dist = get_dist(player[0],rx,player[1],ry,player[4],ra)
 		temp_ray = [rx, ry, dist, 0]
 	
 		rx, ry, xo, yo, mx, my, dof = [0]*7
@@ -77,15 +87,13 @@ def draw_rays():
 				ry += yo
 				dof+=1
 
-		dist = (np.abs(player[0]-rx)+np.abs(player[1]-ry)) 
+		dist = get_dist(player[0],rx,player[1],ry,player[4],ra) 
 		if dist >= temp_ray[2]:
 			ray_list.append(temp_ray)
 		else:
 			ray_list.append([rx, ry, dist, 1])
-		print(ra)
-		ra += 0.01
+		ra += np.pi/180
 		ra %= 2*np.pi
-
 
 	px = player[0]+player_size//2
 	py = player[1]+player_size//2
@@ -93,12 +101,12 @@ def draw_rays():
 	rects = []
 	for idx, ray in enumerate(ray_list):
 		lines.append([px, py, ray[0], ray[1]])
-		rects.append([[idx*7+532, ray[2]//2, 6, 512-ray[2]],[255-ray[3]*100,0,0]])
-	render_field(rects)
+		lh = block_size*512/ray[2]
+		rects.append([[idx*8+532, 256-lh/2, 8, lh],[255-ray[3]*125,0,0]])
+	render(rects)
 	eel.drawLines(lines)
 
-def render_field(rects):
-	#rects = []
+def render(rects=[]):
 	for x in range(len(field)):
 		for y in range(len(field[x])):
 			if field[x][y] == 1:
@@ -106,7 +114,19 @@ def render_field(rects):
 	rects.append([player[:2].tolist()+[player_size, player_size],[0,255,0]])
 	eel.drawRects(rects)
 
-moves = np.zeros(4)#[0, 0, 0, 0] # left up right down
+def move_player(player):
+	player[0] += moves[1]*player[2]*2
+	player[0] -= moves[3]*player[2]*2
+	player[1] += moves[1]*player[3]*2
+	player[1] -= moves[3]*player[3]*2
+	player[4] -= moves[0]*0.05
+	player[4] += moves[2]*0.05
+	player[4] %= 2*np.pi
+	player[2] = np.cos(player[4])
+	player[3] = np.sin(player[4])
+	return player
+
+moves = np.zeros(4) # left up right down
 field = [[1,1,1,1,1,1,1,1],
 	 [1,0,1,0,0,0,0,1],
 	 [1,0,1,0,0,0,0,1],
@@ -126,18 +146,14 @@ eel.init('app')
 eel.start('index.html', size=(1064,562), block=False)
 d = np.arange(4)
 draw_rays()
+start = datetime.datetime.now()
+fps = 0
 while True:
 	eel.sleep(0.01)
 	if 1 in moves:
-		psx = player[0] + player_size//2
-		psy = player[1] + player_size//2
 		draw_rays()
-		player[0] += moves[1]*player[2]*2
-		player[0] -= moves[3]*player[2]*2
-		player[1] += moves[1]*player[3]*2
-		player[1] -= moves[3]*player[3]*2
-		player[4] -= moves[0]*0.03
-		player[4] += moves[2]*0.03
-		player[4] %= 2*np.pi
-		player[2] = np.cos(player[4])
-		player[3] = np.sin(player[4])
+		player = move_player(player)
+	if (datetime.datetime.now() - start).seconds:
+		start, fps = print_fps(start, fps)
+	fps += 1
+		
