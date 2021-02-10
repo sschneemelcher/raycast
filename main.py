@@ -7,6 +7,10 @@ def move(k, v):
 	if 36 < k < 41:
 		global moves
 		moves[k-37] = v
+	elif k == 77:
+		global t_m
+		if v:
+			t_m = (t_m+1)%2
 	
 def print_fps(start, fps):
 	print(fps)
@@ -92,6 +96,7 @@ def draw_rays():
 	return rects, lines
 
 def render(scene=[],lines=[]):
+	eel.sleep(0.01)
 	eel.drawRects(scene)
 	eel.drawLines(lines)
 
@@ -128,6 +133,7 @@ field = [[1,1,1,1,1,1,1,1,1,1],
 	 [1,1,1,1,1,1,1,1,1,1]]
 
 ## parameters ##
+t_m = 1 # toggle map
 deg = np.pi/180	
 max_dof = 8
 block_size = 64
@@ -148,20 +154,23 @@ eel.start('index.html', size=(1064,562), block=False)
 r, l = draw_rays()
 start = datetime.datetime.now()
 fps = 0
-render(background + r + world + [[[player[0]//scale, player[1]//scale, player_size//scale ,player_size//scale],colors[0]]], l)
+p = t_m*[[[player[0]//scale, player[1]//scale, player_size//scale ,player_size//scale],colors[0]]]
+render(background + r + t_m*world + p, t_m*l)
 while True:
-	eel.sleep(0.01)
-	blocked = 1
-	if moves[1] == 1:
-		if (field[int((player[0]+10*player[2])//64)][int((player[1]+10*player[3])//64)] > 0):
-			blocked = 0
-	if moves[3] == 1:
-		if (field[int((player[0]-10*player[2])//64)][int((player[1]-10*player[3])//64)] > 0):
-			blocked = 0
 	if 1 in moves:
+		blocked = 1
+		if moves[1] == 1:
+			if (field[int((player[0]+10*player[2])//64)][int((player[1]+10*player[3])//64)] > 0):
+				blocked = 0
+		if moves[3] == 1:
+			if (field[int((player[0]-10*player[2])//64)][int((player[1]-10*player[3])//64)] > 0):
+				blocked = 0
 		r, l = draw_rays()
-		render(background+ r + world +[[[player[0]//scale,player[1]//scale,player_size//scale,player_size//scale],colors[0]]],l) 
+		p = t_m*[[[player[0]//scale,player[1]//scale,player_size//scale,player_size//scale],[colors[0]]]]
+		render(background+r+t_m*world + p, t_m*l) 
 		player = move_player(player, [moves[0],moves[1]*blocked,moves[2],moves[3]*blocked])
+	else:
+		eel.sleep(0.02)
+	fps += 1
 	if (datetime.datetime.now() - start).seconds:
 		start, fps = print_fps(start, fps)
-	fps += 1
