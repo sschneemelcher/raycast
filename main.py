@@ -48,14 +48,15 @@ def draw_rays():
 		while dof < 8:
 			mx = min(max(int(rx//64),0),len(field)-1)
 			my = min(max(int(ry//64),0),len(field)-1)
-			if field[mx][my] == 1:
+			field_value = field[mx][my]
+			if field_value > 0:
 				dof=8
 			else:
 				rx += xo
 				ry += yo
 				dof+=1
 		dist = get_dist(player[0],rx,player[1],ry,player[4],ra)
-		temp_ray = [rx, ry, dist, 0]
+		temp_ray = [rx, ry, dist, 0, field_value]
 	
 		rx, ry, xo, yo, mx, my, dof = [0]*7
 		#check vertical lines
@@ -80,7 +81,8 @@ def draw_rays():
 		while dof < 8:
 			mx = min(max(int(rx//64),0),len(field)-1)
 			my = min(max(int(ry//64),0),len(field)-1)
-			if field[mx][my] == 1:
+			field_value = field[mx][my]
+			if field_value > 0:
 				dof=8
 			else:
 				rx += xo
@@ -91,36 +93,38 @@ def draw_rays():
 		if dist >= temp_ray[2]:
 			ray_list.append(temp_ray)
 		else:
-			ray_list.append([rx, ry, dist, 1])
+			ray_list.append([rx, ry, dist, 1, field_value])
 		ra += np.pi/180
 		ra %= 2*np.pi
 
-	px = player[0]+player_size//2
-	py = player[1]+player_size//2
+	px = player[0]//scale+player_size//scale//2
+	py = player[1]//scale+player_size//scale//2
 	lines = [] 
 	rects = []
 	for idx, ray in enumerate(ray_list):
-		lines.append([px, py, ray[0], ray[1]])
+		lines.append([px, py, ray[0]//scale, ray[1]//scale])
 		lh = block_size*512/ray[2]
-		rects.append([[idx*8+532, 256-lh/2, 8, lh],[255-ray[3]*125,0,0]])
-	render(rects)
-	eel.drawLines(lines)
+		rects.append([[idx*16+40, 256-lh/2, 16, lh],colors[2*ray[4]-ray[3]]])
+	return rects, lines
 
 def render(rects=[]):
-	for x in range(len(field)):
-		for y in range(len(field[x])):
-			if field[x][y] == 1:
-				rects.append([[x*block_size,y*block_size,block_size-1,block_size-1],[255,255,255]])
-	rects.append([player[:2].tolist()+[player_size, player_size],[0,255,0]])
 	eel.drawRects(rects)
 
-def move_player(player):
-	player[0] += moves[1]*player[2]*2
-	player[0] -= moves[3]*player[2]*2
-	player[1] += moves[1]*player[3]*2
-	player[1] -= moves[3]*player[3]*2
-	player[4] -= moves[0]*0.05
-	player[4] += moves[2]*0.05
+def create_world():
+	blocks = [[[0,0,len(field[0])*block_size//scale-1, len(field)*block_size//scale-1],[10,10,10]]]
+	for x in range(len(field)):
+		for y in range(len(field[x])):
+			if field[x][y] > 0:
+				blocks.append([[x*block_size//scale,y*block_size//scale,(block_size//scale)-1,(block_size//scale)-1],colors[field[x][y]*2]])
+	return blocks
+
+def move_player(player, moves_safe):
+	player[0] += moves_safe[1]*player[2]*2
+	player[0] -= moves_safe[3]*player[2]*2
+	player[1] += moves_safe[1]*player[3]*2
+	player[1] -= moves_safe[3]*player[3]*2
+	player[4] -= moves_safe[0]*0.05
+	player[4] += moves_safe[2]*0.05
 	player[4] %= 2*np.pi
 	player[2] = np.cos(player[4])
 	player[3] = np.sin(player[4])
@@ -128,16 +132,26 @@ def move_player(player):
 
 moves = np.zeros(4) # left up right down
 field = [[1,1,1,1,1,1,1,1],
-	 [1,0,1,0,0,0,0,1],
+	 [1,0,3,0,0,0,0,1],
 	 [1,0,1,0,0,0,0,1],
 	 [1,0,0,0,0,0,0,1],
-	 [1,0,0,0,1,1,0,1],
+	 [1,0,0,0,2,1,0,1],
 	 [1,1,1,0,0,0,0,1],
 	 [1,0,0,0,0,0,0,1],
 	 [1,1,1,1,1,1,1,1]]
 
+
 block_size = 64
 player_size = 16
+scale = 4
+colors = {1:[225,225,225],2:[175,175,175],
+	  3:[225,0,0],4:[175,0,0],
+	  5:[0,225,0],6:[0,175,0]}
+world = create_world()
+background = [[[40,0,976,256],[10,10,175]],
+	      [[40,256,976,256],[75,75,75]]]
+
+
 
 player = np.zeros(5)
 player[:2]+=200
@@ -150,9 +164,26 @@ start = datetime.datetime.now()
 fps = 0
 while True:
 	eel.sleep(0.01)
+	blocked = 0
+	if moves[1] == 1:
+		if (field[int((player[0]+10*player[2])//64)][int((player[1]+10*player[3])//64)] > 0):
+			blocked = 1
+	if moves[3] == 1:
+		if (field[int((player[0]-10*player[2])//64)][int((player[1]-10*player[3])//64)] > 0):
+			blocked = 1
 	if 1 in moves:
-		draw_rays()
-		player = move_player(player)
+		scene = []
+		r, l = draw_rays()
+		scene += background
+		scene += r
+		scene += world
+		scene += [[[player[0]//scale, player[1]//scale, player_size//scale, player_size//scale],[0,255,0]]]
+		render(scene)
+		eel.drawLines(l)
+		if blocked:
+			player = move_player(player, [moves[0],0,moves[2],0])
+		else:
+			player = move_player(player, moves)
 	if (datetime.datetime.now() - start).seconds:
 		start, fps = print_fps(start, fps)
 	fps += 1
