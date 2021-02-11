@@ -16,83 +16,66 @@ def print_fps(start, fps):
 	print(fps)
 	return datetime.datetime.now(), 0
 
-def get_dist(x1, x2, y1, y2, a1, a2):
-	ca = np.cos((a1-a2)%(2*np.pi))
-	return ((x1-x2)**2+(y1-y2)**2)**(1/2)*ca
-
-def draw_rays():
-	ray_list = []
-	ra = (player[4]-30*deg)%(2*np.pi)
-	for r in range(61):
-		rx, ry, xo, yo, mx, my, dof = [0]*7
-		#check horizontal lines
-		if ra == 0 or ra == np.pi: #if this happens, the ray cant hit anything
-			rx = player[0]
-			ry = player[1]
-			ra = (ra+deg)%(2*np.pi)
-			continue
-		else:	
-			atan = -(np.cos(ra)/np.sin(ra))
-			ntan = -np.sin(ra)/np.cos(ra)
-
-		if ra > np.pi:
-			ry = (player[1]//64)*64-0.0001
-			yo = -block_size
-		else:
-			ry = (player[1]//64)*64+block_size
-			yo = block_size
-		rx = (player[1]-ry)*atan+player[0]
-		xo = -yo*atan
-		while dof < max_dof:
-			mx = min(max(int(rx//64),0),len(field)-1)
-			my = min(max(int(ry//64),0),len(field)-1)
-			field_value = field[mx][my]
-			if field_value > 0:
-				dof=max_dof
-			else:
-				rx += xo
-				ry += yo
-				dof+=1
-		dist = get_dist(player[0],rx,player[1],ry,player[4],ra)
-		temp_ray = [rx, ry, dist, 0, field_value]
-	
-		rx, ry, xo, yo, mx, my, dof = [0]*7
-		#check vertical lines
-		if (3*np.pi/2 > ra > np.pi/2):
-			rx = (player[0]//64)*64-0.0001
-			xo = -block_size
-		else:
-			rx = (player[0]//64)*64+block_size
-			xo = block_size
-		ry = (player[0] - rx)*ntan+player[1]
-		yo = -xo*ntan
-		while dof < max_dof:
-			mx = min(max(int(rx//64),0),len(field)-1)
-			my = min(max(int(ry//64),0),len(field)-1)
-			field_value = field[mx][my]
-			if field_value > 0:
-				dof=max_dof
-			else:
-				rx += xo
-				ry += yo
-				dof+=1
-
-		dist = get_dist(player[0],rx,player[1],ry,player[4],ra) 
-		if dist >= temp_ray[2]:
-			ray_list.append(temp_ray)
-		else:
-			ray_list.append([rx, ry, dist, 1, field_value])
-		ra = (ra+deg)%(2*np.pi)
-
-	px = (player[0]//scale)+(player_size//scale*0.5)
-	py = (player[1]//scale)+(player_size//scale*0.5)
-	lines = [] 
+def dda():
 	rects = []
-	for idx, ray in enumerate(ray_list):
-		if ray[4] > 0:
-			lines.append([px, py, ray[0]//scale, ray[1]//scale])
-			lh = block_size*512/ray[2]
-			rects.append([[idx*16+40, 256-lh*0.5, 16, lh],colors[2*ray[4]-ray[3]]])
+	lines = []
+	w = map_width*k
+	for x in range(w):
+		camera_x = 2 * x*k**-1 / map_width - 1
+		ray_dir_x = player[2] + plane[0] * camera_x
+		ray_dir_y = player[3] + plane[1] * camera_x
+		if ray_dir_x == 0 or ray_dir_y == 0:
+			continue
+
+		map_x = int(player[0])
+		map_y = int(player[1])
+		
+		delta_dist_x = np.abs(ray_dir_x**-1);
+		delta_dist_y = np.abs(ray_dir_y**-1);
+		hit = 0
+
+		if ray_dir_x < 0:
+			step_x = -1
+			side_dist_x = (player[0] - map_x) * delta_dist_x
+		else:
+			step_x = 1
+			side_dist_x = (map_x + 1 - player[0]) * delta_dist_x;
+
+		if ray_dir_y < 0:
+			step_y = -1
+			side_dist_y = (player[1] - map_y) * delta_dist_y
+		else:
+			step_y = 1
+			side_dist_y = (map_y + 1 - player[1]) * delta_dist_y;
+
+		dof = 0
+		while hit == 0 and dof < max_dof:
+			if side_dist_x < side_dist_y:
+				side_dist_x += delta_dist_x;
+				map_x += step_x
+				side = 0
+			else:
+				side_dist_y += delta_dist_y
+				map_y += step_y
+				side = 1
+			field_value = field[map_x][map_y]
+			if field_value > 0:
+				hit = 1
+			dof += 1
+		if hit == 0:
+			continue
+	
+		if side == 0:
+			perp_wall_dist = (map_x - player[0] + (1 - step_x) / 2) / ray_dir_x
+		else:
+			perp_wall_dist = (map_y - player[1] + (1 - step_y) / 2) / ray_dir_y
+		
+		lh = screen_height / max(perp_wall_dist,1)
+		lw = screen_width//w
+		px = (player[0]*bs+ps//2)+player[2]-camera_x
+		py = (player[1]*bs+ps//2)+player[3]
+		rects.append([[x*lw, (screen_height*0.5)-lh*0.5, lw, lh],colors[2*field_value-side]])
+		lines.append([px, py, px+(ray_dir_x*perp_wall_dist)*bs-player[2], py+(ray_dir_y*perp_wall_dist)*bs-player[3]])
 	return rects, lines
 
 def render(scene=[],lines=[]):
@@ -101,24 +84,28 @@ def render(scene=[],lines=[]):
 	eel.drawLines(lines)
 
 def create_world():
-	blocks = [[[0,0,len(field[0])*block_size//scale-1, len(field)*block_size//scale-1],[10,10,10]]]
-	for x in range(len(field)):
-		for y in range(len(field[x])):
+	blocks = [[[0,0,map_width*bs-1, map_height*bs-1],[10,10,10]]]
+	for x in range(map_width):
+		for y in range(map_height):
 			if field[x][y] > 0:
-				blocks.append([[x*block_size//scale,y*block_size//scale,(block_size//scale)-1,(block_size//scale)-1],colors[field[x][y]*2]])
+				blocks.append([[x*bs,y*bs,bs-1,bs-1],colors[field[x][y]*2]])
 	return blocks
 
-def move_player(player, moves_safe):
-	player[0] += moves_safe[1]*player[2]*2
-	player[0] -= moves_safe[3]*player[2]*2
-	player[1] += moves_safe[1]*player[3]*2
-	player[1] -= moves_safe[3]*player[3]*2
-	player[4] -= moves_safe[0]*0.05
-	player[4] += moves_safe[2]*0.05
-	player[4] %= 2*np.pi
-	player[2] = np.cos(player[4])
-	player[3] = np.sin(player[4])
-	return player
+def rotate(mat, degree):
+	rot_mat = [[np.cos(degree), -np.sin(degree)],
+		   [np.sin(degree), np.cos(degree)]]
+	return np.dot(mat,rot_mat)
+
+def move_player(player, plane, moves_safe):
+	r = moves_safe[0] - moves_safe[2]
+	if r:
+		rot = deg*2
+		player[2:4] = rotate(player[2:4], r*rot)
+		plane = rotate(plane, r*rot)
+
+	player[0] += (moves_safe[1] - moves_safe[3])*player[2]*0.03
+	player[1] += (moves_safe[1] - moves_safe[3])*player[3]*0.03
+	return player, plane
 
 moves = np.zeros(4) # left up right down
 field = [[1,1,1,1,1,1,1,1,1,1],
@@ -133,42 +120,51 @@ field = [[1,1,1,1,1,1,1,1,1,1],
 	 [1,1,1,1,1,1,1,1,1,1]]
 
 ## parameters ##
-t_m = 1 # toggle map
-deg = np.pi/180	
-max_dof = 8
+t_m = 0 # toggle map
+deg = np.pi/180	 # 1 degree in radian
 block_size = 64
+scale = 4 # scale for the minimap
+k = 12 # rays per block 
+bs = block_size//scale
 player_size = 16
-scale = 4
+ps = player_size//scale
 colors = {0:[0,255,0],
 	  1:[225,225,225],2:[175,175,175],
 	  3:[225,0,0],4:[175,0,0],
 	  5:[0,225,0],6:[0,175,0]}
 world = create_world()
-background = [[[40,0,976,256],[10,10,175]],
-	      [[40,256,976,256],[75,75,75]]]
+screen_width = 960
+screen_height = 480
+map_width = 10
+map_height = 10
+max_dof = map_width #max ray length in block sizes
+background = [[[0,0,screen_width//(map_width*k)*(map_width*k),screen_height*0.5],[50,0,145]]]
 
-player = np.zeros(5)
-player[:2]+=100
+player = np.zeros(4)
+player[:3] = 1
+plane = np.zeros(2)
+plane[1] = 0.66
+
 eel.init('app')
-eel.start('index.html', size=(1064,562), block=False)
-r, l = draw_rays()
+eel.start('index.html', size=(screen_width+20,screen_height+50), block=False)
 start = datetime.datetime.now()
 fps = 0
-p = t_m*[[[player[0]//scale, player[1]//scale, player_size//scale ,player_size//scale],colors[0]]]
+p = t_m*[[[player[0]*bs, player[1]*bs, ps, ps],colors[0]]]
+r, l = dda()
 render(background + r + t_m*world + p, t_m*l)
 while True:
 	if 1 in moves:
 		blocked = 1
 		if moves[1] == 1:
-			if (field[int((player[0]+10*player[2])//64)][int((player[1]+10*player[3])//64)] > 0):
+			if (field[int((player[0]+0.1*player[2]))][int((player[1]+0.1*player[3]))] > 0):
 				blocked = 0
 		if moves[3] == 1:
-			if (field[int((player[0]-10*player[2])//64)][int((player[1]-10*player[3])//64)] > 0):
+			if (field[int((player[0]-0.1*player[2]))][int((player[1]-0.1*player[3]))] > 0):
 				blocked = 0
-		r, l = draw_rays()
-		p = t_m*[[[player[0]//scale,player[1]//scale,player_size//scale,player_size//scale],[colors[0]]]]
-		render(background+r+t_m*world + p, t_m*l) 
-		player = move_player(player, [moves[0],moves[1]*blocked,moves[2],moves[3]*blocked])
+		r, l = dda()
+		p = t_m*[[[player[0]*bs,player[1]*bs,ps,ps],[colors[0]]]]
+		render(background+r+t_m*world + p, t_m*l)
+		player, plane = move_player(player, plane, [moves[0],moves[1]*blocked,moves[2],moves[3]*blocked])
 	else:
 		eel.sleep(0.02)
 	fps += 1
