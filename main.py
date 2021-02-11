@@ -21,65 +21,43 @@ def dda():
 	lines = []
 	w = map_width*k
 	for x in range(w):
-		camera_x = 2 * x*k**-1 / map_width - 1
-		ray_dir_x = player[2] + plane[0] * camera_x
-		ray_dir_y = player[3] + plane[1] * camera_x
-		if ray_dir_x == 0 or ray_dir_y == 0:
+		camera_x = 2 * x / k / map_width - 1
+		ray_dir = player[2:4] + plane * camera_x
+		if 0 in ray_dir:
 			continue
 
-		map_x = int(player[0])
-		map_y = int(player[1])
-		
-		delta_dist_x = np.abs(ray_dir_x**-1);
-		delta_dist_y = np.abs(ray_dir_y**-1);
+		map_coords = player[:2]//1
+		steps = np.sign(ray_dir)
+		delta_dists = steps/ray_dir
 		hit = 0
-
-		if ray_dir_x < 0:
-			step_x = -1
-			side_dist_x = (player[0] - map_x) * delta_dist_x
-		else:
-			step_x = 1
-			side_dist_x = (map_x + 1 - player[0]) * delta_dist_x;
-
-		if ray_dir_y < 0:
-			step_y = -1
-			side_dist_y = (player[1] - map_y) * delta_dist_y
-		else:
-			step_y = 1
-			side_dist_y = (map_y + 1 - player[1]) * delta_dist_y;
+		
+		side_dists = (steps * map_coords + (steps+1)*0.5 + (-steps) * player[:2]) * delta_dists
 
 		dof = 0
 		while hit == 0 and dof < max_dof:
-			if side_dist_x < side_dist_y:
-				side_dist_x += delta_dist_x;
-				map_x += step_x
-				side = 0
-			else:
-				side_dist_y += delta_dist_y
-				map_y += step_y
-				side = 1
-			field_value = field[map_x][map_y]
-			if field_value > 0:
+			side = int(side_dists[1] < side_dists[0])
+			map_coords[side] = (map_coords[side]+steps[side]) % map_width
+			side_dists[side] += delta_dists[side]
+			field_value = field[int(map_coords[0])][int(map_coords[1])]
+			if field_value:
 				hit = 1
 			dof += 1
-		if hit == 0:
+		if not hit:
 			continue
 	
-		if side == 0:
-			perp_wall_dist = (map_x - player[0] + (1 - step_x) / 2) / ray_dir_x
-		else:
-			perp_wall_dist = (map_y - player[1] + (1 - step_y) / 2) / ray_dir_y
-		
-		lh = screen_height / max(perp_wall_dist,1)
+		perp_wall_dist = (map_coords[side] - player[side] + (1 - steps[side]) / 2) / ray_dir[side]
+		lh = screen_height
+		if perp_wall_dist:
+			lh /= perp_wall_dist
 		lw = screen_width//w
-		px = (player[0]*bs+ps//2)+player[2]-camera_x
-		py = (player[1]*bs+ps//2)+player[3]
-		rects.append([[x*lw, (screen_height*0.5)-lh*0.5, lw, lh],colors[2*field_value-side]])
-		lines.append([px, py, px+(ray_dir_x*perp_wall_dist)*bs-player[2], py+(ray_dir_y*perp_wall_dist)*bs-player[3]])
-	return rects, lines
+		px = (player[0]*bs+ps*0.5)+player[2]-camera_x
+		py = (player[1]*bs+ps*0.5)+player[3]
+		rects.append([[x*lw, (screen_height-lh)*0.5, lw, lh],colors[2*field_value-side]])
+		lines.append([px, py, px+(ray_dir[0]*perp_wall_dist)*bs-player[2], py+(ray_dir[1]*perp_wall_dist)*bs-player[3]])
+	return rects, lines[::int(k**0.5)]
 
 def render(scene=[],lines=[]):
-	eel.sleep(0.01)
+	eel.sleep(0.005)
 	eel.drawRects(scene)
 	eel.drawLines(lines)
 
@@ -124,7 +102,7 @@ t_m = 0 # toggle map
 deg = np.pi/180	 # 1 degree in radian
 block_size = 64
 scale = 4 # scale for the minimap
-k = 12 # rays per block 
+k = 24 # rays per block 
 bs = block_size//scale
 player_size = 16
 ps = player_size//scale
@@ -132,13 +110,13 @@ colors = {0:[0,255,0],
 	  1:[225,225,225],2:[175,175,175],
 	  3:[225,0,0],4:[175,0,0],
 	  5:[0,225,0],6:[0,175,0]}
-world = create_world()
 screen_width = 960
 screen_height = 480
 map_width = 10
 map_height = 10
 max_dof = map_width #max ray length in block sizes
 background = [[[0,0,screen_width//(map_width*k)*(map_width*k),screen_height*0.5],[50,0,145]]]
+world = create_world()
 
 player = np.zeros(4)
 player[:3] = 1
