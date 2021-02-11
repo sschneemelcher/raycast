@@ -1,22 +1,20 @@
+function setup() {
+	let cnv = createCanvas(1024, 512, P2D);
+}
+
 function drawLines(coordinates) {
-	var c = document.getElementById("myCanvas");
-	var ctx = c.getContext("2d");
-	ctx.strokeStyle = "red";
+	stroke(color(255,0,0));
 	coordinates.forEach(function(current) {
-		ctx.moveTo(current[0], current[1]);
-		ctx.lineTo(current[2], current[3]);
-		ctx.stroke();
+		line(current[0], current[1], current[2], current[3])
 		});
 	}
 
 function drawRects(rects) { // rects = [[x, y, w, h, "color"], [...],...]
-	var c = document.getElementById("myCanvas");
-	var ctx = c.getContext("2d");
-	ctx.beginPath();
-	ctx.clearRect(0, 0, c.width, c.height);
-	rects.forEach(function(rect) {
-		ctx.fillStyle = "rgb("+rect[1][0]+","+rect[1][1]+","+rect[1][2]+")";
-		ctx.fillRect(rect[0][0], rect[0][1], rect[0][2], rect[0][3]);
+	clear()
+	rects.forEach(function(r) {
+		fill(color(r[1][0],r[1][1],r[1][2]));
+		noStroke();
+		rect(r[0][0], r[0][1], r[0][2], r[0][3]);
 		});
 	}
 
@@ -24,5 +22,7 @@ function sendKey(e, v) {
 	eel.move(e.keyCode, v)
 }
 
+
+eel.expose(setup);
 eel.expose(drawLines);
 eel.expose(drawRects);

@@ -155,6 +155,7 @@ r, l = draw_rays()
 start = datetime.datetime.now()
 fps = 0
 p = t_m*[[[player[0]//scale, player[1]//scale, player_size//scale ,player_size//scale],colors[0]]]
+eel.setup()
 render(background + r + t_m*world + p, t_m*l)
 while True:
 	if 1 in moves:
