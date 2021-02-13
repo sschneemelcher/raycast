@@ -27,6 +27,7 @@ def dda():
 	rects = []
 	lines = []
 	w = map_width*k
+	llh = 0	
 	for x in range(w):
 		camera_x = 2 * x / k / map_width - 1
 		ray_dir = [player[i+2] + plane[i] * camera_x for i in [0,1]]
@@ -61,10 +62,10 @@ def dda():
 		py = (player[1]*bs+ps*0.5)
 		rects.append([[x*lw, (screen_height-lh)*0.5, lw, lh],colors[2*field_value-side]])
 		lines.append([px, py, px+(ray_dir[0]*perp_wall_dist)*bs, py+(ray_dir[1]*perp_wall_dist)*bs])
-	return rects, lines[::int(k**0.5)]
+	return rects, lines[::k]
 
 def render(scene=[],lines=[]):
-	eel.sleep(0.0025)
+	eel.sleep(0.00001)
 	eel.drawRects(scene)
 	eel.drawLines(lines)
 
@@ -100,7 +101,7 @@ sin = np.sin(rot)
 nsin = np.sin(-rot)
 cos = np.cos(rot)
 block_size = 64
-scale = 4 # scale for the minimap
+scale = 8 # scale for the minimap
 k = 24 # rays per block 
 bs = block_size//scale
 player_size = 16
@@ -124,6 +125,7 @@ plane = [0,0.66]
 
 eel.init('app')
 eel.start('index.html', size=(screen_width+20,screen_height+50), block=False)
+#eel.setup()
 start = datetime.datetime.now()
 fps = 0
 p = t_m*[[[player[0]*bs, player[1]*bs, ps, ps],colors[0]]]
